@@ -4,7 +4,6 @@ from card import Card, Deck
 from player import Player, PlayerAction, PlayerStatus
 from hand_evaluator import HandEvaluator
 
-
 class GamePhase(Enum):
     SETUP = "setup"
     PRE_FLOP = "pre-flop"
@@ -97,34 +96,62 @@ class PokerGame:
             return False
 
         if action == PlayerAction.CALL:
+            call_amount = self.current_bet - player.bet_amount
+        
+            # Can't call more than you have
+            amount = min(call_amount, player.stack)
+            
+            # Check if this will be an all-in call (less than full call amount)
+            if amount < call_amount:
+                print(f"Not enough chips to call. Going all-in with {amount}")
+                action = PlayerAction.ALL_IN
+
+        if action == PlayerAction.CALL:
             amount = self.current_bet - player.bet_amount
 
         if action in [PlayerAction.BET, PlayerAction.RAISE]:
             # For a bet, the minimum is the big blind
             min_amount = self.big_blind
 
-            # For a raise, the minimum is the current bet plus the minimum raise amount
+            # For a raise, the minimum is the previous raise plus the minimum raise amount
             if self.current_bet > 0:
-                min_amount = self.current_bet
+                min_amount = self.current_bet #self.current_bet + self.min_raise
                 action = PlayerAction.RAISE
+                
+                # Calculate the actual raise amount (for min_raise tracking)
+                raise_amount = amount - self.current_bet
+                
+                # Make sure the raise meets the minimum
+                if amount < min_amount:
+                    print(f"Minimum raise is {min_amount}")
+                    return False
+                
+                # Update minimum raise for future raises in this round
+                self.min_raise = raise_amount
             else:
                 action = PlayerAction.BET
-
-            if amount < min_amount:
-                print(f"Minimum {action.value} is {min_amount}")
-                return False
-
-            # Update minimum raise
-            self.min_raise = amount - self.current_bet
+                
+                # Ensure minimum bet
+                if amount < min_amount:
+                    print(f"Minimum bet is {min_amount}")
+                    return False
 
             # Update current bet
             self.current_bet = amount
-
+            
         if action == PlayerAction.ALL_IN:
-            if amount <= 0 or player.bet_amount <= 0:
+            # Handle all-in logic
+            if player.stack <= 0:
                 return False
-            if player.bet_amount > self.current_bet:
-                self.current_bet = player.bet_amount
+                
+            all_in_amount = player.stack + player.bet_amount
+            
+            # If the all-in amount is greater than current bet, it's also a raise
+            if all_in_amount > self.current_bet:
+                raise_amount = all_in_amount - self.current_bet
+                if raise_amount >= self.min_raise:
+                    self.min_raise = raise_amount
+                self.current_bet = all_in_amount
 
         # Execute action
         print(f"{player.name} {action.value}s", end="")
@@ -284,27 +311,23 @@ class PokerGame:
         pot
         <4. Current Raise Amount>
         current_raise
-        <5. Number of players>
-        num_players
-        <6. Each player's stack>
+        <5. Each player's stack>
         stack1
         stack2
         stack3
         stack4
-        <7. Blind>
+        <6. Blind>
         blind
-        <8. Game number>
+        <7. Game number>
         game_number
         """
         player = self.players[self.active_player_index]
-        player_cards = [card.get_index() for card in player.hole_cards] + (2 - len(player.hole_cards)) * [0]
         community_cards = [card.get_index() for card in self.community_cards] + (5 - len(self.community_cards)) * [0]
         return [
-            *player_cards,
+            *(card.get_index() for card in player.hole_cards),
             *community_cards,
             self.pot,
             self.current_bet,
-            len(self.players),
             *(p.stack for p in self.players),
             self.big_blind,
             self.game_number,

@@ -42,8 +42,9 @@ def get_player_input(game: PokerGame) -> bool:
             elif action_input == "2":
                 return game.player_action(PlayerAction.CALL)
             elif action_input == "3":
-                amount = int(input(f"Enter total raise amount: "))
-                return game.player_action(PlayerAction.RAISE, amount)
+                raise_amount = int(input(f"Enter raise amount (min {game.min_raise}): "))
+                total_amount = game.current_bet + raise_amount
+                return game.player_action(PlayerAction.RAISE, total_amount)
     except ValueError:
         print("Invalid input")
         return False
